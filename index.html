@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>生物钟国籍计算器 / Bio-Clock Citizenship</title>
+    <title>生物钟属地计算器 / Bio-Clock Citizenship</title>
     <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -61,19 +61,35 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useRef, useEffect } = React;
+        const { useState, useRef, useEffect, useMemo } = React;
 
-        const cities = [
-            { id: "Los Angeles", offset: -8, code: "us", region: { zh: "美国西海岸", en: "US West Coast" } },
-            { id: "Mexico City", offset: -6, code: "mx", region: { zh: "墨西哥", en: "Mexico" } },
-            { id: "New York",    offset: -5, code: "us", region: { zh: "美国东海岸", en: "US East Coast" } },
-            { id: "Rio",         offset: -3, code: "br", region: { zh: "巴西", en: "Brazil" } },
-            { id: "London",      offset: 0,  code: "gb", region: { zh: "英国", en: "UK" } },
-            { id: "Rome",        offset: 1,  code: "it", region: { zh: "意大利", en: "Italy" } },
-            { id: "Cairo",       offset: 2,  code: "eg", region: { zh: "埃及", en: "Egypt" } },
-            { id: "Moscow",      offset: 3,  code: "ru", region: { zh: "俄罗斯", en: "Russia" } },
-            { id: "Beijing",     offset: 8,  code: "cn", region: { zh: "中国", en: "China" } },
-            { id: "Sydney",      offset: 11, code: "au", region: { zh: "澳大利亚", en: "Australia" } }
+        const getTimeZoneOffset = (timeZone) => {
+            try {
+                const now = new Date();
+                const tzString = now.toLocaleString('en-US', { timeZone });
+                const tzDate = new Date(tzString);
+                const utcString = now.toLocaleString('en-US', { timeZone: 'UTC' });
+                const utcDate = new Date(utcString);
+
+                // 该地区比UTC快多少小时
+                return (tzDate - utcDate) / (1000 * 60 * 60);
+            } catch (e) {
+                console.warn(`Timezone error for ${timeZone}:`, e);
+                return 0; // Fallback
+            }
+        };
+
+        const citiesData = [
+            { id: "Los Angeles", timezone: "America/Los_Angeles", code: "us", region: { zh: "美国西海岸", en: "US West Coast" } },
+            { id: "Mexico City", timezone: "America/Mexico_City", code: "mx", region: { zh: "墨西哥", en: "Mexico" } },
+            { id: "New York",    timezone: "America/New_York",    code: "us", region: { zh: "美国东海岸", en: "US East Coast" } },
+            { id: "Rio",         timezone: "America/Sao_Paulo",   code: "br", region: { zh: "巴西", en: "Brazil" } },
+            { id: "London",      timezone: "Europe/London",       code: "gb", region: { zh: "英国", en: "UK" } },
+            { id: "Rome",        timezone: "Europe/Rome",         code: "it", region: { zh: "意大利", en: "Italy" } },
+            { id: "Cairo",       timezone: "Africa/Cairo",        code: "eg", region: { zh: "埃及", en: "Egypt" } },
+            { id: "Moscow",      timezone: "Europe/Moscow",       code: "ru", region: { zh: "俄罗斯", en: "Russia" } },
+            { id: "Beijing",     timezone: "Asia/Shanghai",       code: "cn", region: { zh: "中国", en: "China" } },
+            { id: "Sydney",      timezone: "Australia/Sydney",    code: "au", region: { zh: "澳大利亚", en: "Australia" } }
         ];
 
         const translations = {
@@ -243,7 +259,6 @@
             else return "match";
         };
 
-
         const getCommentText = (cityId, commentKey, t) => {
             const specificCityComments = t.regionComments[cityId];
             if (specificCityComments && specificCityComments[commentKey]) {
@@ -253,24 +268,32 @@
         };
 
         function App() {
-            const [lang, setLang] = useState('zh'); // 'zh' or 'en'
+            const [lang, setLang] = useState('zh');
             const [wakeTime, setWakeTime] = useState("09:00");
-            const [userOffset, setUserOffset] = useState(8); 
             const [result, setResult] = useState(null); 
             const [isGenerating, setIsGenerating] = useState(false);
             const [isDropdownOpen, setIsDropdownOpen] = useState(false);
             
+            const rawPresets = [
+                { key: "beijing", code: "cn", timezone: "Asia/Shanghai" },
+                { key: "tokyo", code: "jp", timezone: "Asia/Tokyo" },
+                { key: "london", code: "gb", timezone: "Europe/London" },
+                { key: "newyork", code: "us", timezone: "America/New_York" },
+                { key: "la", code: "us", timezone: "America/Los_Angeles" },
+            ];
+
+            const timezonePresets = useMemo(() => {
+                return rawPresets.map(p => ({
+                    ...p,
+                    val: getTimeZoneOffset(p.timezone)
+                }));
+            }, []);
+
+            const [userOffset, setUserOffset] = useState(timezonePresets[0].val);
+
             const resultRef = useRef(null);
             const qrRef = useRef(null);
             const t = translations[lang];
-
-            const timezonePresets = [
-                { val: 8, key: "beijing", code: "cn" },
-                { val: 9, key: "tokyo", code: "jp" },
-                { val: 0, key: "london", code: "gb" },
-                { val: -5, key: "newyork", code: "us" },
-                { val: -8, key: "la", code: "us" },
-            ];
 
             const handleCalculate = (e) => {
                 e.preventDefault();
@@ -285,8 +308,11 @@
                 let minDiff = 1000.0;
                 let bestLocalTime = 0.0;
 
-                for (let i = 0; i < cities.length; i++) {
-                    const cityTime = normalizeTime(utcWakeDecimal + cities[i].offset);
+                for (let i = 0; i < citiesData.length; i++) {
+                    const city = citiesData[i];
+                    const cityCurrentOffset = getTimeZoneOffset(city.timezone);
+                    
+                    const cityTime = normalizeTime(utcWakeDecimal + cityCurrentOffset);
                     let diff = Math.abs(cityTime - IDEAL_WAKE_HOUR);
                     if (diff > 12.0) diff = 24.0 - diff;
 
@@ -351,7 +377,7 @@
 
                     const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
                     const link = document.createElement('a');
-                    const cityName = cities[result.cityIndex].region[lang];
+                    const cityName = citiesData[result.cityIndex].region[lang];
                     link.download = `BioClock-${cityName}.jpg`;
                     link.href = dataUrl;
                     link.click();
@@ -496,20 +522,20 @@
                                     <div className="relative z-10 p-6">
                                         <p className="text-gray-400 text-xs tracking-widest uppercase mb-2 font-bold">{t.reportTitle}</p>
                                         <h3 className="text-indigo-600 font-bold text-lg mb-4 border-b border-gray-100 pb-2 inline-block">
-                                            {cities[result.cityIndex].id}
+                                            {citiesData[result.cityIndex].id}
                                         </h3>
                                         
                                         <div className="flex justify-center mb-3 emoji-bounce drop-shadow-sm">
                                             <img 
-                                                src={`https://flagcdn.com/w160/${cities[result.cityIndex].code}.png`}
-                                                alt={cities[result.cityIndex].region[lang]}
+                                                src={`https://flagcdn.com/w160/${citiesData[result.cityIndex].code}.png`}
+                                                alt={citiesData[result.cityIndex].region[lang]}
                                                 className="h-16 w-auto rounded shadow-sm object-cover"
                                                 crossOrigin="anonymous" 
                                             />
                                         </div>
                                         
                                         <h2 className="text-3xl font-black text-gray-800 mb-1">
-                                            {cities[result.cityIndex].region[lang]}
+                                            {citiesData[result.cityIndex].region[lang]}
                                         </h2>
                                         
                                         <div className="bg-indigo-50 rounded-lg p-3 mb-4 text-left mx-2 border border-indigo-100 mt-4">
@@ -524,7 +550,7 @@
                                         </div>
 
                                         <div className="text-indigo-800 text-sm font-medium italic px-2 mb-6">
-                                            {t.commentQuote.replace('{comment}', getCommentText(cities[result.cityIndex].id, result.commentKey, t))}
+                                            {t.commentQuote.replace('{comment}', getCommentText(citiesData[result.cityIndex].id, result.commentKey, t))}
                                         </div>
 
                                         <div className="pt-4 border-t border-dashed border-gray-200 flex items-center justify-between px-2">
