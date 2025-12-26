@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>生物钟国籍计算器 / Bio-Clock Citizenship</title>
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Html2Canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- QRCode.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #f0f9ff;
+        }
+        .emoji-bounce {
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(-5%); }
+            50% { transform: translateY(0); }
+        }
+        /* #fff 没BUG #ffffff就出BUG？何意味？？？ */
+        .force-light-mode {
+            background-color: #fff !important; 
+            color: #1f2937 !important;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+        .animation-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        const cities = [
+            { id: "Los Angeles", offset: -8, code: "us", region: { zh: "美国西海岸", en: "US West Coast" } },
+            { id: "Mexico City", offset: -6, code: "mx", region: { zh: "墨西哥", en: "Mexico" } },
+            { id: "New York",    offset: -5, code: "us", region: { zh: "美国东海岸", en: "US East Coast" } },
+            { id: "Rio",         offset: -3, code: "br", region: { zh: "巴西", en: "Brazil" } },
+            { id: "London",      offset: 0,  code: "gb", region: { zh: "英国", en: "UK" } },
+            { id: "Rome",        offset: 1,  code: "it", region: { zh: "意大利", en: "Italy" } },
+            { id: "Cairo",       offset: 2,  code: "eg", region: { zh: "埃及", en: "Egypt" } },
+            { id: "Moscow",      offset: 3,  code: "ru", region: { zh: "俄罗斯", en: "Russia" } },
+            { id: "Beijing",     offset: 8,  code: "cn", region: { zh: "中国", en: "China" } },
+            { id: "Sydney",      offset: 11, code: "au", region: { zh: "澳大利亚", en: "Australia" } }
+        ];
+
+        const translations = {
+            zh: {
+                title: "🌏 生物钟计算器",
+                subtitle: "看看你是哪国人作息",
+                wakeTimeLabel: "起床时间",
+                timezoneLabel: "当前时区",
+                calculateBtn: "🚀 计算我的作息在哪个地区",
+                reportTitle: "我的作息是这里人",
+                labelMyWake: "我的起床",
+                labelLocalTime: "当地时间",
+                commentQuote: "“{comment}”",
+                scanTitle: "测测你的生物钟在哪个地区",
+                scanHint: "扫码体验",
+                btnGenerating: "生成中...",
+                btnSave: "保存结果图片分享",
+                presets: {
+                    beijing: "北京",
+                    tokyo: "东京",
+                    london: "伦敦",
+                    newyork: "纽约",
+                    la: "洛杉矶",
+                    other: "其他时区"
+                },
+                footer: "😴 ↔️ 🌍",
+                regionComments: {
+                    default: {
+                        early: "在这里，你是个令人敬佩的自律早起者。",
+                        lazy: "在当地，你这算是个慵懒的早午餐爱好者。",
+                        match: "你的作息完全符合当地标准，完美融入！"
+                    },
+                    "Beijing": {
+                        early: "五点多就上景山溜达了？您这精气神儿倍儿足！",
+                        match: "地道的北京范儿，这就奔胡同口，来碗炒肝儿，就俩焦圈儿！",
+                        lazy: "您这可真是会享福，跟什刹海边上溜达的老北京一样自在。"
+                    },
+                    "New York": {
+                        early: "华尔街之狼都没你起得早，去中央公园跑个步吧！",
+                        match: "标准的纽约客，手里缺一杯热美式和贝果。",
+                        lazy: "布鲁克林艺术家作息，昨晚是又在哪个画廊开幕派对上嗨到凌晨了？"
+                    },
+                    "London": {
+                        early: "伦敦的雾还没散，你和皇家卫兵一样准时。",
+                        match: "完美融入伦敦节奏，'Mind the Gap' 之余，别忘了喝杯红茶。",
+                        lazy: "这慵懒的贵族范儿，是在等下午茶的三层点心塔？"
+                    },
+                    "Sydney": {
+                        early: "邦迪海滩的救生员还没上岗呢！",
+                        match: "典型的悉尼生活，带上冲浪板，去曼利海滩晒个日光浴，再来份'Vegemite'酱吐司！",
+                        lazy: "纯正的澳式慢生活，准备好傍晚去港口边来场烧烤派对了吗？"
+                    },
+                    "Los Angeles": {
+                        early: "比贝弗利山的保安起得还早，是去好莱坞山跑徒步？",
+                        match: "标准的加州作息，等会儿就得堵在101高速上。",
+                        lazy: "很符合LA的松弛感，还是说你在倒剧组的时差？"
+                    },
+                    "Rome": {
+                        early: "起这么早？连罗马的咖啡馆可能都没开门呢。",
+                        match: "Ciao! 完美的罗马假日时间，这就去街角咖啡馆站着喝杯Espresso！",
+                        lazy: "典型的罗马式悠闲，准备用两小时享受一顿午餐，顺便讨论下今晚的足球赛？"
+                    },
+                    "Moscow": {
+                        early: "红场的哨兵刚换岗！同志，裹紧你的大衣！",
+                        match: "战斗民族的标准作息，准备好迎接寒风了吗？",
+                        lazy: "喝了伏特加宿醉未醒？没事，这很俄罗斯。"
+                    },
+                    "Rio": {
+                        early: "你是要去面包山山顶看第一缕阳光吗？",
+                        match: "正好赶上科帕卡巴纳海滩的第一波热浪。",
+                        lazy: "绝对的桑巴灵魂，昨晚的狂欢节游行还没缓过神吧？没关系，生命在于热情和休息！"
+                    }
+                }
+            },
+            en: {
+                title: "🌏 Bio-Clock Calculator",
+                subtitle: "Find where your sleep schedule belongs",
+                wakeTimeLabel: "Wake-up Time",
+                timezoneLabel: "Current Timezone",
+                calculateBtn: "🚀 Find My Bio-Clock Region",
+                reportTitle: "I sleep like a local in:",
+                labelMyWake: "My Wake-up",
+                labelLocalTime: "Local Time",
+                commentQuote: "“{comment}”",
+                scanTitle: "Test where your bio-clock belongs",
+                scanHint: "Scan to try",
+                btnGenerating: "Generating...",
+                btnSave: "Save & Share",
+                presets: {
+                    beijing: "Beijing",
+                    tokyo: "Tokyo",
+                    london: "London",
+                    newyork: "New York",
+                    la: "Los Angeles",
+                    other: "Other Timezones"
+                },
+                footer: "😴 ↔️ 🌍",
+                regionComments: {
+                    default: {
+                        early: "Here, you are an impressively disciplined early bird.",
+                        lazy: "In this region, you're a relaxed brunch enthusiast.",
+                        match: "Your rhythm is perfectly synced with the locals. You blend right in!"
+                    },
+                    "Beijing": {
+                        early: "Up before the flag raising? You're beating the grandpas to morning Tai Chi in the park!",
+                        match: "A true Beijinger. Grab a Jianbing, squeeze onto the subway, and hustle!",
+                        lazy: "Living the calm life, strolling the Hutongs while everyone else is at work."
+                    },
+                    "New York": {
+                        early: "You're up before the Wall Street bell! Time for a power run in Central Park.",
+                        match: "Textbook New Yorker. Coffee in one hand, bagel in the other, walking faster than cars.",
+                        lazy: "Total Brooklyn artist vibes. Recovering from a gallery opening late last night?"
+                    },
+                    "London": {
+                        early: "Up before the fog lifts? Even the King's Guard isn't this ready.",
+                        match: "Perfect timing. Mind the Gap on the tube and put the kettle on for a cuppa.",
+                        lazy: "Very aristocratic. Are you waiting for high tea or just avoiding the morning drizzle?"
+                    },
+                    "Sydney": {
+                        early: "Beat the surfers to Bondi Beach? Good on ya, mate!",
+                        match: "Classic Aussie morning. Grab a flat white and smash some avo on toast.",
+                        lazy: "No worries, mate. Just in time to fire up the barbie for the afternoon."
+                    },
+                    "Los Angeles": {
+                        early: "Up early for a hike at Griffith Park before the smog settles in?",
+                        match: "Spot on. Get your green juice and prepare to sit in 405 freeway traffic.",
+                        lazy: "Very L.A. mellow. You're strictly on 'industry time' or writing a screenplay, right?"
+                    },
+                    "Rome": {
+                        early: "Mamma mia! You're awake before the Vatican opens its doors.",
+                        match: "Ciao! Perfect timing to stand at the bar for a quick espresso and a cornetto.",
+                        lazy: "La Dolce Vita indeed. Waking up just in time for a three-hour lunch?"
+                    },
+                    "Moscow": {
+                        early: "Up before the snow melts? You have the iron discipline of a cosmonaut.",
+                        match: "Standard rhythm. Put on your ushanka and brace for the cold, comrade.",
+                        lazy: "Heavy night? A little pickle brine will fix that right up. Na Zdorovie!"
+                    },
+                    "Rio": {
+                        early: "Catching the sunrise over Christ the Redeemer? Beautiful dedication.",
+                        match: "Boa! Straight to Copacabana beach for some morning football.",
+                        lazy: "True Carioca spirit. Resting up for the carnival party tonight? No stress!"
+                    }
+                }
+            }
+        };
+
+        const IDEAL_WAKE_HOUR = 7.5; // 7:30 AM
+
+        const normalizeTime = (t) => {
+            while (t < 0) t += 24.0;
+            while (t >= 24.0) t -= 24.0;
+            return t;
+        };
+
+        const formatTimeStr = (decimalTime) => {
+            let h = Math.floor(decimalTime);
+            let m = Math.floor((decimalTime - h) * 60 + 0.5);
+            if (m >= 60) { h++; m = 0; }
+            if (h >= 24) h = 0;
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+        };
+
+        const getCommentKey = (localTime) => {
+            if (localTime < 7.0) return "early";
+            else if (localTime > 8.5) return "lazy";
+            else return "match";
+        };
+
+
+        const getCommentText = (cityId, commentKey, t) => {
+            const specificCityComments = t.regionComments[cityId];
+            if (specificCityComments && specificCityComments[commentKey]) {
+                return specificCityComments[commentKey];
+            }
+            return t.regionComments.default[commentKey];
+        };
+
+        function App() {
+            const [lang, setLang] = useState('zh'); // 'zh' or 'en'
+            const [wakeTime, setWakeTime] = useState("09:00");
+            const [userOffset, setUserOffset] = useState(8); 
+            const [result, setResult] = useState(null); 
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+            
+            const resultRef = useRef(null);
+            const qrRef = useRef(null);
+            const t = translations[lang];
+
+            const timezonePresets = [
+                { val: 8, key: "beijing", code: "cn" },
+                { val: 9, key: "tokyo", code: "jp" },
+                { val: 0, key: "london", code: "gb" },
+                { val: -5, key: "newyork", code: "us" },
+                { val: -8, key: "la", code: "us" },
+            ];
+
+            const handleCalculate = (e) => {
+                e.preventDefault();
+                const [hStr, mStr] = wakeTime.split(':');
+                const userH = parseInt(hStr, 10);
+                const userM = parseInt(mStr, 10);
+
+                const userWakeDecimal = userH + (userM / 60.0);
+                const utcWakeDecimal = normalizeTime(userWakeDecimal - userOffset);
+
+                let bestIndex = -1;
+                let minDiff = 1000.0;
+                let bestLocalTime = 0.0;
+
+                for (let i = 0; i < cities.length; i++) {
+                    const cityTime = normalizeTime(utcWakeDecimal + cities[i].offset);
+                    let diff = Math.abs(cityTime - IDEAL_WAKE_HOUR);
+                    if (diff > 12.0) diff = 24.0 - diff;
+
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        bestIndex = i;
+                        bestLocalTime = cityTime;
+                    }
+                }
+
+                if (bestIndex !== -1) {
+                    setResult({
+                        cityIndex: bestIndex,
+                        userWakeDecimal,
+                        bestLocalTime,
+                        commentKey: getCommentKey(bestLocalTime)
+                    });
+                }
+            };
+
+            useEffect(() => {
+                if (result && qrRef.current) {
+                    qrRef.current.innerHTML = "";
+                    try {
+                        new QRCode(qrRef.current, {
+                            text: window.location.href,
+                            width: 64,
+                            height: 64,
+                            colorDark : "#4f46e5",
+                            colorLight : "#ffffff",
+                            correctLevel : QRCode.CorrectLevel.L
+                        });
+                    } catch (e) {
+                        console.error("QRCode generation failed", e);
+                    }
+                }
+            }, [result, lang]);
+
+            const handleDownloadImage = async () => {
+                if (!resultRef.current) return;
+                
+                setIsGenerating(true);
+                try {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    const canvas = await html2canvas(resultRef.current, {
+                        useCORS: true,       
+                        scale: 2,            
+                        backgroundColor: "#fff", 
+                        logging: false,      
+                        allowTaint: false,
+                        scrollX: 0,
+                        scrollY: 0,
+                        onclone: (clonedDoc) => {
+                            const element = clonedDoc.querySelector('.force-light-mode');
+                            if (element) {
+                                element.style.backgroundColor = '#fff';
+                                element.style.color = '#000000';
+                            }
+                        }
+                    });
+
+                    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+                    const link = document.createElement('a');
+                    const cityName = cities[result.cityIndex].region[lang];
+                    link.download = `BioClock-${cityName}.jpg`;
+                    link.href = dataUrl;
+                    link.click();
+                    
+                } catch (error) {
+                    console.error('html2canvas failed', error);
+                    alert("Image generation failed. Please screenshot manually.");
+                } finally {
+                    setIsGenerating(false);
+                }
+            };
+
+            const renderSelectedLabel = () => {
+                const preset = timezonePresets.find(p => p.val === userOffset);
+                if (preset) {
+                    return (
+                        <div className="flex items-center gap-2">
+                            <img 
+                                src={`https://flagcdn.com/w40/${preset.code}.png`} 
+                                className="w-5 h-auto rounded-sm object-cover shadow-sm"
+                                alt={t.presets[preset.key]}
+                            />
+                            <span className="text-gray-700 font-medium truncate">{t.presets[preset.key]}</span>
+                            <span className="text-gray-400 text-xs whitespace-nowrap">UTC{preset.val >= 0 ? '+' : ''}{preset.val}</span>
+                        </div>
+                    );
+                }
+                return <span className="text-gray-700">UTC {userOffset >= 0 ? '+' : ''}{userOffset}</span>;
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-100 font-sans">
+                    <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-visible border border-gray-100 relative"> 
+
+                        <div className="absolute top-4 right-4 z-30">
+                            <button 
+                                onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+                                className="bg-white/20 hover:bg-white/30 text-white border border-white/40 rounded-full px-3 py-1 text-xs font-bold backdrop-blur-sm transition-all active:scale-95"
+                            >
+                                {lang === 'zh' ? 'EN' : '中'}
+                            </button>
+                        </div>
+
+                        <div className="bg-indigo-600 p-6 text-center rounded-t-2xl">
+                            <h1 className="text-2xl font-bold text-white mb-2">{t.title}</h1>
+                            <p className="text-indigo-200 text-sm">{t.subtitle}</p>
+                        </div>
+
+                        <div className="p-6 space-y-6 border-b border-gray-100 relative z-20">
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                                        {t.wakeTimeLabel}
+                                    </label>
+                                    <input
+                                        type="time"
+                                        value={wakeTime}
+                                        onChange={(e) => setWakeTime(e.target.value)}
+                                        className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none text-base bg-white shadow-sm"
+                                    />
+                                </div>
+                                <div className="flex-1 relative">
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                                        {t.timezoneLabel}
+                                    </label>
+                                    
+                                    <button 
+                                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                        className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-base text-left flex items-center justify-between shadow-sm overflow-hidden"
+                                    >
+                                        {renderSelectedLabel()}
+                                        <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 flex-shrink-0 ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    </button>
+
+                                    {isDropdownOpen && (
+                                        <>
+                                            <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)}></div>
+                                            <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-64 overflow-y-auto custom-scrollbar z-20 animation-fade-in">
+                                                <div className="py-1">
+                                                    {timezonePresets.map((preset) => (
+                                                        <div 
+                                                            key={preset.key}
+                                                            onClick={() => { setUserOffset(preset.val); setIsDropdownOpen(false); }}
+                                                            className="px-4 py-2 hover:bg-indigo-50 cursor-pointer flex items-center gap-3 border-b border-gray-50 last:border-0 transition-colors"
+                                                        >
+                                                            <img 
+                                                                src={`https://flagcdn.com/w40/${preset.code}.png`} 
+                                                                className="w-5 h-auto rounded-sm shadow-sm"
+                                                                alt={preset.code}
+                                                            />
+                                                            <div className="flex flex-col">
+                                                                <span className="text-sm font-medium text-gray-700">{t.presets[preset.key]}</span>
+                                                                <span className="text-[10px] text-gray-400">UTC{preset.val >= 0 ? '+' : ''}{preset.val}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    
+                                                    <div className="px-4 py-1.5 bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                                                        {t.presets.other}
+                                                    </div>
+
+                                                    {[...Array(25).keys()].map(i => {
+                                                        const offset = i - 12;
+                                                        return (
+                                                            <div 
+                                                                key={offset}
+                                                                onClick={() => { setUserOffset(offset); setIsDropdownOpen(false); }}
+                                                                className="px-4 py-2 hover:bg-indigo-50 cursor-pointer text-sm text-gray-600 transition-colors"
+                                                            >
+                                                                UTC {offset >= 0 ? '+' : ''}{offset}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handleCalculate}
+                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md flex items-center justify-center gap-2 active:scale-95"
+                            >
+                                <span>{t.calculateBtn}</span>
+                            </button>
+                        </div>
+
+                        {result && (
+                            <div className="bg-indigo-50 p-6 animation-fade-in flex flex-col items-center space-y-4 rounded-b-2xl">
+                                
+                                <div 
+                                    ref={resultRef} 
+                                    className="w-full relative overflow-hidden rounded-xl shadow-sm border border-gray-200 text-center bg-white force-light-mode"
+                                    style={{ backgroundColor: '#fff' }}
+                                >
+                                    
+                                    <div className="absolute inset-0 bg-white" style={{ zIndex: 0, backgroundColor: '#fff' }}></div>
+                                    <div className="absolute top-0 right-0 -mt-8 -mr-8 w-24 h-24 bg-indigo-100 rounded-full opacity-50" style={{ zIndex: 1 }}></div>
+                                    <div className="absolute top-0 left-0 -mt-4 -ml-4 w-16 h-16 bg-blue-50 rounded-full opacity-50" style={{ zIndex: 1 }}></div>
+
+                                    <div className="relative z-10 p-6">
+                                        <p className="text-gray-400 text-xs tracking-widest uppercase mb-2 font-bold">{t.reportTitle}</p>
+                                        <h3 className="text-indigo-600 font-bold text-lg mb-4 border-b border-gray-100 pb-2 inline-block">
+                                            {cities[result.cityIndex].id}
+                                        </h3>
+                                        
+                                        <div className="flex justify-center mb-3 emoji-bounce drop-shadow-sm">
+                                            <img 
+                                                src={`https://flagcdn.com/w160/${cities[result.cityIndex].code}.png`}
+                                                alt={cities[result.cityIndex].region[lang]}
+                                                className="h-16 w-auto rounded shadow-sm object-cover"
+                                                crossOrigin="anonymous" 
+                                            />
+                                        </div>
+                                        
+                                        <h2 className="text-3xl font-black text-gray-800 mb-1">
+                                            {cities[result.cityIndex].region[lang]}
+                                        </h2>
+                                        
+                                        <div className="bg-indigo-50 rounded-lg p-3 mb-4 text-left mx-2 border border-indigo-100 mt-4">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <span className="text-xs text-gray-500">{t.labelMyWake}</span>
+                                                <span className="font-mono font-bold text-gray-700">{formatTimeStr(result.userWakeDecimal)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs text-gray-500">{t.labelLocalTime}</span>
+                                                <span className="font-mono font-bold text-indigo-600">{formatTimeStr(result.bestLocalTime)}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="text-indigo-800 text-sm font-medium italic px-2 mb-6">
+                                            {t.commentQuote.replace('{comment}', getCommentText(cities[result.cityIndex].id, result.commentKey, t))}
+                                        </div>
+
+                                        <div className="pt-4 border-t border-dashed border-gray-200 flex items-center justify-between px-2">
+                                            <div className="text-left">
+                                                <p className="text-xs font-bold text-gray-800">{t.scanTitle}</p>
+                                                <p className="text-[10px] text-gray-400">{t.scanHint}</p>
+                                            </div>
+                                            <div ref={qrRef} className="p-1 rounded border border-gray-100 bg-white" style={{ backgroundColor: '#fff' }}></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={handleDownloadImage}
+                                    disabled={isGenerating}
+                                    className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-bold text-sm shadow-md transition-all ${
+                                        isGenerating 
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                                        : 'bg-green-500 hover:bg-green-600 text-white hover:shadow-lg active:scale-95'
+                                    }`}
+                                >
+                                    {isGenerating ? (
+                                        <>
+                                            <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            {t.btnGenerating}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                            </svg>
+                                            {t.btnSave}
+                                        </>
+                                    )}
+                                </button>
+                                <p className="text-xs text-indigo-300 mt-2">
+                                    {lang === 'zh' ? '图片生成后可长按保存或分享' : 'Tap & hold to save/share image'}
+                                </p>
+                            </div>
+                        )}
+                        
+                        {!result && (
+                            <div className="p-6 text-center text-gray-400 text-sm bg-indigo-50/50 rounded-b-2xl">
+                                <p>{t.footer}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
